@@ -104,6 +104,9 @@ class MkDocsConfig(base.Config):
     """Enabling strict mode causes MkDocs to stop the build when a problem is
     encountered rather than display an error."""
 
+    verbose = c.Type(bool, default=False)
+    """Enable verbose output."""
+
     remote_branch = c.Type(str, default='gh-pages')
     """The remote branch to commit to when using gh-deploy."""
 

@@ -335,9 +335,25 @@ class CLITests(unittest.TestCase):
             site_dir='custom',
         )
 
+
     @mock.patch('mkdocs.config.load_config', autospec=True)
     @mock.patch('mkdocs.commands.build.build', autospec=True)
-    def test_build_verbose(self, mock_build, mock_load_config):
+    def test_build_verbose_cli(self, mock_build, mock_load_config):
+        result = self.runner.invoke(cli.cli, ['build', '--verbose'], catch_exceptions=False)
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(mock_build.call_count, 1)
+        handler = logging._handlers.get('MkDocsStreamHandler')
+        self.assertEqual(handler.level, logging.DEBUG)
+
+    @mock.patch('mkdocs.config.load_config', autospec=True)
+    @mock.patch('mkdocs.commands.build.build', autospec=True)
+    @mock.patch('mkdocs.config.defaults.MkDocsConfig', autospec=True)
+    def test_build_verbose_config_file(self, mock_build, mock_load_config, mock_config):
+        instance = mock_config.return_value
+        instance.verbose.return_value = True
+        mock_load_config.return_value = mock_config
+
         result = self.runner.invoke(cli.cli, ['build', '--verbose'], catch_exceptions=False)
 
         self.assertEqual(result.exit_code, 0)

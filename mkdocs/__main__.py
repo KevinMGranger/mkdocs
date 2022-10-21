@@ -6,13 +6,13 @@ import logging
 import os
 import shutil
 import sys
-import textwrap
 import traceback
 import warnings
 
 import click
 
 from mkdocs import __version__, config, utils
+from mkdocs.utils import State
 
 if sys.platform.startswith("win"):
     try:
@@ -50,53 +50,6 @@ def _enable_warnings():
     warnings.showwarning = _showwarning
 
 
-class ColorFormatter(logging.Formatter):
-    colors = {
-        'CRITICAL': 'red',
-        'ERROR': 'red',
-        'WARNING': 'yellow',
-        'DEBUG': 'blue',
-    }
-
-    text_wrapper = textwrap.TextWrapper(
-        width=shutil.get_terminal_size(fallback=(0, 0)).columns,
-        replace_whitespace=False,
-        break_long_words=False,
-        break_on_hyphens=False,
-        initial_indent=' ' * 12,
-        subsequent_indent=' ' * 12,
-    )
-
-    def format(self, record):
-        message = super().format(record)
-        prefix = f'{record.levelname:<8} -  '
-        if record.levelname in self.colors:
-            prefix = click.style(prefix, fg=self.colors[record.levelname])
-        if self.text_wrapper.width:
-            # Only wrap text if a terminal width was detected
-            msg = '\n'.join(self.text_wrapper.fill(line) for line in message.splitlines())
-            # Prepend prefix after wrapping so that color codes don't affect length
-            return prefix + msg[12:]
-        return prefix + message
-
-
-class State:
-    """Maintain logging level."""
-
-    def __init__(self, log_name='mkdocs', level=logging.INFO):
-        self.logger = logging.getLogger(log_name)
-        # Don't restrict level on logger; use handler
-        self.logger.setLevel(1)
-        self.logger.propagate = False
-
-        self.stream = logging.StreamHandler()
-        self.stream.setFormatter(ColorFormatter())
-        self.stream.setLevel(level)
-        self.stream.name = 'MkDocsStreamHandler'
-        self.logger.addHandler(self.stream)
-
-    def __del__(self):
-        self.logger.removeHandler(self.stream)
 
 
 pass_state = click.make_pass_decorator(State, ensure=True)
@@ -239,12 +192,15 @@ def serve_command(dev_addr, livereload, watch, **kwargs):
 @common_config_options
 @click.option('-d', '--site-dir', type=click.Path(), help=site_dir_help)
 @common_options
-def build_command(clean, **kwargs):
+@pass_state
+def build_command(state, clean, **kwargs):
     """Build the MkDocs documentation"""
     from mkdocs.commands import build
 
     _enable_warnings()
     cfg = config.load_config(**kwargs)
+    if cfg.verbose:
+        state.stream.setLevel(logging.DEBUG)
     cfg['plugins'].run_event('startup', command='build', dirty=not clean)
     try:
         build.build(cfg, dirty=not clean)
@@ -264,14 +220,17 @@ def build_command(clean, **kwargs):
 @common_config_options
 @click.option('-d', '--site-dir', type=click.Path(), help=site_dir_help)
 @common_options
+@pass_state
 def gh_deploy_command(
-    clean, message, remote_branch, remote_name, force, no_history, ignore_version, shell, **kwargs
+    state, clean, message, remote_branch, remote_name, force, no_history, ignore_version, shell, **kwargs
 ):
     """Deploy your documentation to GitHub Pages"""
     from mkdocs.commands import build, gh_deploy
 
     _enable_warnings()
     cfg = config.load_config(remote_branch=remote_branch, remote_name=remote_name, **kwargs)
+    if cfg.verbose:
+        state.stream.setLevel(logging.DEBUG)
     cfg['plugins'].run_event('startup', command='gh-deploy', dirty=not clean)
     try:
         build.build(cfg, dirty=not clean)

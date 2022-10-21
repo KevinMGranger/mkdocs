@@ -17,6 +17,7 @@ import warnings
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import PurePath
+import textwrap
 from typing import (
     IO,
     TYPE_CHECKING,
@@ -30,6 +31,7 @@ from typing import (
     TypeVar,
 )
 from urllib.parse import urlsplit
+import click
 
 if sys.version_info >= (3, 10):
     from importlib.metadata import EntryPoint, entry_points
@@ -458,6 +460,52 @@ class CountHandler(logging.NullHandler):
     def get_counts(self) -> List[Tuple[str, int]]:
         return [(logging.getLevelName(k), v) for k, v in sorted(self.counts.items(), reverse=True)]
 
+class State:
+    """Maintain logging level."""
+
+    def __init__(self, log_name='mkdocs', level=logging.INFO):
+        self.logger = logging.getLogger(log_name)
+        # Don't restrict level on logger; use handler
+        self.logger.setLevel(1)
+        self.logger.propagate = False
+
+        self.stream = logging.StreamHandler()
+        self.stream.setFormatter(ColorFormatter())
+        self.stream.setLevel(level)
+        self.stream.name = 'MkDocsStreamHandler'
+        self.logger.addHandler(self.stream)
+
+    def __del__(self):
+        self.logger.removeHandler(self.stream)
+
+class ColorFormatter(logging.Formatter):
+    colors = {
+        'CRITICAL': 'red',
+        'ERROR': 'red',
+        'WARNING': 'yellow',
+        'DEBUG': 'blue',
+    }
+
+    text_wrapper = textwrap.TextWrapper(
+        width=shutil.get_terminal_size(fallback=(0, 0)).columns,
+        replace_whitespace=False,
+        break_long_words=False,
+        break_on_hyphens=False,
+        initial_indent=' ' * 12,
+        subsequent_indent=' ' * 12,
+    )
+
+    def format(self, record):
+        message = super().format(record)
+        prefix = f'{record.levelname:<8} -  '
+        if record.levelname in self.colors:
+            prefix = click.style(prefix, fg=self.colors[record.levelname])
+        if self.text_wrapper.width:
+            # Only wrap text if a terminal width was detected
+            msg = '\n'.join(self.text_wrapper.fill(line) for line in message.splitlines())
+            # Prepend prefix after wrapping so that color codes don't affect length
+            return prefix + msg[12:]
+        return prefix + message
 
 # For backward compatibility as some plugins import it.
 # It is no longer necessary as all messages on the

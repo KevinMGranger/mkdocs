@@ -27,6 +27,7 @@ def serve(
     livereload='livereload',
     watch_theme=False,
     watch=[],
+    log_state=None,
     **kwargs,
 ):
     """
@@ -43,17 +44,26 @@ def serve(
 
     def mount_path(config: MkDocsConfig):
         return urlsplit(config.site_url or '/').path
+    
+    initial_log_level = log_state.stream.level if log_state is not None else logging.INFO
 
-    get_config = functools.partial(
-        load_config,
-        config_file=config_file,
-        dev_addr=dev_addr,
-        strict=strict,
-        theme=theme,
-        theme_dir=theme_dir,
-        site_dir=site_dir,
-        **kwargs,
-    )
+    def get_config(**kwargs):
+        config = load_config(
+            config_file=config_file,
+            dev_addr=dev_addr,
+            strict=strict,
+            theme=theme,
+            theme_dir=theme_dir,
+            site_dir=site_dir,
+            **kwargs,
+        )
+        if log_state is not None:
+            if config.verbose:
+                log_state.stream.setLevel(logging.DEBUG)
+            else:
+                log_state.stream.setLevel(initial_log_level)
+
+        return config
 
     live_server = livereload in ('dirty', 'livereload')
     dirty = livereload == 'dirty'
